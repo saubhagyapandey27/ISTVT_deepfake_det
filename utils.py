@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import torch
 import os
-from mtcnn import MTCNN
+from facenet_pytorch import MTCNN
 from typing import List, Optional, Tuple
 import logging
 
@@ -22,19 +22,12 @@ class FaceDetector:
     """Face detection and preprocessing using MTCNN"""
     
     def __init__(self, device=None, margin=1.25, min_face_size=20):
-        if device is None:
-            # Let MTCNN decide based on CUDA availability
-            self.detector = MTCNN(
-                min_face_size=min_face_size,
-                thresholds=[0.6, 0.7, 0.7]
-            )
-        else:
-            # Use specified device
-            self.detector = MTCNN(
-                min_face_size=min_face_size,
-                thresholds=[0.6, 0.7, 0.7],
-                device=device
-            )
+        # Use specified device
+        self.detector = MTCNN(
+            min_face_size=min_face_size,
+            thresholds=[0.6, 0.7, 0.7],
+            device='cpu'
+        )
         self.margin = margin
     
     def align_face(self, frame: np.ndarray, landmarks: dict) -> Optional[np.ndarray]:
@@ -76,30 +69,52 @@ class FaceDetector:
     def detect_face(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """Detect, align, and crop face from frame using nose-tip alignment"""
         try:
-            results = self.detector.detect_faces(frame)
-            if not results:
+            boxes, probs, landmarks = self.detector.detect(frame, landmarks=True)
+            
+            if boxes is None or len(boxes) == 0:
                 return None
+
+            # Get largest face (first detection is usually the most confident)
+            box = boxes[0]
+            x, y, w, h = box.astype(int).tolist()
             
-            # Get largest face
-            largest_face = max(results, key=lambda x: x['box'][2] * x['box'][3])
-            x, y, w, h = largest_face['box']
-            keypoints = largest_face.get('keypoints', {})
-            
+            keypoints = {}
+            if landmarks is not None and len(landmarks) > 0:
+                kp = landmarks[0]
+                keypoints = {
+                    'left_eye': kp[0].astype(int).tolist(),
+                    'right_eye': kp[1].astype(int).tolist(),
+                    'nose': kp[2].astype(int).tolist(),
+                    'mouth_left': kp[3].astype(int).tolist(),
+                    'mouth_right': kp[4].astype(int).tolist()
+                }
+
             # Apply face alignment first (maintains temporal stability)
             aligned_frame = self.align_face(frame, keypoints)
             if aligned_frame is None:
                 aligned_frame = frame
-            
+
             # Re-detect face in aligned frame for accurate cropping
-            aligned_results = self.detector.detect_faces(aligned_frame)
-            if aligned_results:
-                aligned_face = max(aligned_results, key=lambda x: x['box'][2] * x['box'][3])
-                x, y, w, h = aligned_face['box']
-                keypoints = aligned_face.get('keypoints', {})
+            aligned_boxes, aligned_probs, aligned_landmarks = self.detector.detect(aligned_frame, landmarks=True)
             
+            if aligned_boxes is not None and len(aligned_boxes) > 0:
+                # Use the first (most confident) detection
+                box = aligned_boxes[0]
+                x, y, w, h = box.astype(int).tolist()
+                
+                keypoints = {}
+                if aligned_landmarks is not None and len(aligned_landmarks) > 0:
+                    kp = aligned_landmarks[0]
+                    keypoints = {
+                        'left_eye': kp[0].astype(int).tolist(),
+                        'right_eye': kp[1].astype(int).tolist(),
+                        'nose': kp[2].astype(int).tolist(),
+                        'mouth_left': kp[3].astype(int).tolist(),
+                        'mouth_right': kp[4].astype(int).tolist()
+                    }
+
             # Extract nose tip coordinates for centering (paper specification)
             nose_tip = keypoints.get('nose')
-            
             if nose_tip is not None:
                 # Use nose tip as center (paper requirement)
                 center_x, center_y = nose_tip[0], nose_tip[1]
@@ -107,20 +122,19 @@ class FaceDetector:
                 # Fallback to bbox center if nose detection fails
                 center_x, center_y = x + w//2, y + h//2
                 print("Warning: Nose tip not detected, using bbox center")
-            
+
             # Calculate crop size: 1.25 * max(height, width) as per paper
             size = int(max(w, h) * self.margin)
-            
+
             # Crop around nose tip center
             x1 = max(0, center_x - size//2)
             y1 = max(0, center_y - size//2)
             x2 = min(aligned_frame.shape[1], center_x + size//2)
             y2 = min(aligned_frame.shape[0], center_y + size//2)
-            
+
             # Ensure square crop
             crop_w = x2 - x1
             crop_h = y2 - y1
-            
             if crop_w != crop_h:
                 target_size = min(crop_w, crop_h)
                 x1 = max(0, center_x - target_size//2)
@@ -132,17 +146,17 @@ class FaceDetector:
                     x1 = max(0, x2 - target_size)
                 if y2 - y1 < target_size:
                     y1 = max(0, y2 - target_size)
-            
+
             face = aligned_frame[y1:y2, x1:x2]
-            
             if face.shape[0] > 0 and face.shape[1] > 0:
                 return cv2.resize(face, (300, 300))
             else:
                 return None
-            
+
         except Exception as e:
             print(f"Face detection error: {e}")
             return None
+
     
     def extract_sequence(self, video_path: str, target_length: int = 6) -> List[np.ndarray]:
         """Extract face sequence from video"""
