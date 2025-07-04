@@ -1,115 +1,199 @@
 # ISTVT: Interpretable Spatial-Temporal Video Transformer for Deepfake Detection
 
-Official implementation of "ISTVT: Interpretable Spatial-Temporal Video Transformer for Deepfake Detection" (IEEE TIFS 2023).
+**Course Project Implementation for EE656**
 
-## Features
+This repository contains a PyTorch implementation of the ISTVT (Interpretable Spatial-Temporal Video Transformer) model for deepfake detection, developed as a course project for EE656. The implementation is based on the paper "ISTVT: Interpretable Spatial-Temporal Video Transformer for Deepfake Detection" but represents an independent implementation for educational purposes.
 
-- **Decomposed Spatial-Temporal Attention**: Reduces computational complexity from O(T²H²W²) to O(T²+H²W²)
-- **Self-Subtract Mechanism**: Captures inter-frame temporal inconsistencies  
-- **Interpretability**: LRP-based visualization of spatial and temporal attention
-- **Robust Performance**: State-of-the-art results on multiple deepfake datasets
+## Project Overview
 
-## Quick Start
+This implementation focuses on video-based deepfake detection using a transformer architecture that processes spatial and temporal information separately to achieve computational efficiency while maintaining detection accuracy.
 
-### 1. Installation
+### Key Features
+
+- **Decomposed Spatial-Temporal Attention**: Processes spatial and temporal dimensions separately to reduce computational complexity
+- **Self-Subtract Mechanism**: Captures temporal inconsistencies between consecutive frames
+- **Face-Centered Processing**: Uses MTCNN for face detection and alignment
+- **Configurable Architecture**: Easily adjustable model parameters through configuration file
+
+## Project Structure
+
 ```
-git clone https://github.com/your-repo/istvt-deepfake
-cd istvt-deepfake
+ISTVT_deepfake_det/
+├── config.py          # Model and training configuration
+├── dataset.py         # Dataset handling and data loading
+├── inference.py       # Inference and prediction functionality  
+├── model.py           # ISTVT model implementation
+├── train.py           # Training script
+├── utils.py           # Utility functions (face detection, metrics, etc.)
+├── requirements.txt   # Python dependencies
+└── data/             # Dataset directory (to be created)
+```
+
+## Installation
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/saubhagyapandey27/ISTVT_deepfake_det/
+cd ee656_project
+```
+
+2. **Install dependencies**
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Dataset Preparation
+3. **Create data directory structure**
+```bash
+mkdir -p data/{train,val,test}/{real,fake}
+```
 
-Create the following directory structure:
+## Dataset Preparation
+
+Organize your video dataset in the following structure:
+
 ```
 data/
 ├── train/
-│ ├── real/
-│ └── fake/
+│   ├── real/     # Real videos for training
+│   └── fake/     # Fake videos for training
 ├── val/
-│ ├── real/
-│ └── fake/
+│   ├── real/     # Real videos for validation
+│   └── fake/     # Fake videos for validation
 └── test/
-├── real/
-└── fake/
+    ├── real/     # Real videos for testing
+    └── fake/     # Fake videos for testing
 ```
 
-Place your video files (.mp4, .avi, .mov) in the appropriate folders.
-
-### 3. Training
-```
-python train.py
-```
-
-Training logs and checkpoints will be saved to `./logs` and `./checkpoints`.
-
-### 4. Inference
-
-Single video:
-```
-python inference.py --model checkpoints/best_model.pth --video path/to/video.mp4 --visualize
-```
-
-Batch processing:
-```
-python inference.py --model checkpoints/best_model.pth --video_dir path/to/videos/ --output_dir ./results
-```
+**Supported video formats**: `.mp4`, `.avi`, `.mov`
 
 ## Model Architecture
 
-ISTVT consists of:
+### Core Components
 
-1. **Feature Extractor**: Xception entry flow for texture feature extraction
-2. **Decomposed Attention**: Separate spatial and temporal self-attention 
-3. **Self-Subtract Mechanism**: Highlights temporal inconsistencies
-4. **Transformer Blocks**: 12 layers with 8 attention heads
-5. **Classification Head**: Final MLP for binary classification
+1. **Feature Extractor**: Xception entry flow (first 3 blocks) for texture feature extraction
+2. **Classification Tokens**: Three types of tokens for different purposes:
+   - Prediction CLS token (final classification)
+   - Temporal CLS token (temporal aggregation)
+   - Spatial CLS tokens (spatial features for each frame)
+3. **Decomposed Attention**: Separate spatial and temporal self-attention mechanisms
+4. **Self-Subtract Mechanism**: Temporal attention operates on frame differences
+5. **Transformer Blocks**: 12 layers with 8-head attention
 
-## Configuration
+### Model Parameters
 
-Modify `config.py` to adjust:
-- Model parameters (embed_dim, num_heads, num_layers)
-- Training settings (batch_size, learning_rate, num_epochs)
-- Data parameters (sequence_length, input_size)
+- **Input**: 6 consecutive frames of 300×300 RGB images
+- **Feature Dimension**: 728
+- **Attention Heads**: 8
+- **Transformer Layers**: 12
+- **Output**: Binary classification (real/fake)
 
-## Key Parameters
+## Usage
 
-- `sequence_length`: Number of frames per video (default: 6)
-- `embed_dim`: Feature dimension (default: 728)
-- `num_heads`: Number of attention heads (default: 8)
-- `num_layers`: Number of transformer blocks (default: 12)
+### Training
 
-## Performance
-
-Achieves state-of-the-art results on:
-- FaceForensics++ dataset
-- Celeb-DF dataset  
-- DFDC dataset
-- Cross-dataset generalization
-
-## Note on Paper Reproducibility
-
-This codebase provides all the core functionalities for training, evaluation, and inference of the ISTVT model as described in the paper. However, the following components are **not included**:
-
-- **LRP-based Interpretability/Visualization:** The Layer-wise Relevance Propagation (LRP) method for visualizing spatial and temporal attention, as described in the paper, is not implemented here.
-- **Robustness Testing Scripts:** Scripts for evaluating model robustness under JPEG compression, downscaling, and random dropout perturbations are not included.
-- **Ablation/Experiment Scripts:** Scripts for running ablation studies on attention variants, sequence lengths, and model depths are not provided.
-
-These components are required for full reproduction of the experimental results and interpretability analyses in the ISTVT paper. The current codebase is fully functional for standard training and inference workflows.
-
-## Citation
+```bash
+python train.py
 ```
-@article{zhao2023istvt,
-title={ISTVT: Interpretable Spatial-Temporal Video Transformer for Deepfake Detection},
-author={Zhao, Cairong and Wang, Chutian and Hu, Guosheng and Chen, Haonan and Liu, Chun and Tang, Jinhui},
-journal={IEEE Transactions on Information Forensics and Security},
-volume={18},
-pages={1335--1348},
-year={2023},
-publisher={IEEE}
-}
+
+**Training Features**:
+- Automatic checkpoint saving
+- Tensorboard logging
+- Gradient clipping
+- Cosine annealing scheduler
+- Warmup epochs
+
+**Outputs**:
+- Model checkpoints: `./checkpoints/`
+- Training logs: `./logs/`
+- Tensorboard logs: `./logs/`
+
+### Inference
+
+**Single video prediction**:
+```bash
+python inference.py --model checkpoints/best_model.pth --video path/to/video.mp4
+```
+
+**Batch processing**:
+```bash
+python inference.py --model checkpoints/best_model.pth --video_dir path/to/videos/ --output_dir ./results
+```
+
+**With visualization**:
+```bash
+python inference.py --model checkpoints/best_model.pth --video path/to/video.mp4 --visualize
+```
+
+### Configuration
+
+Modify `config.py` to adjust model and training parameters:
+
+```python
+# Model parameters
+sequence_length: int = 6        # Number of frames per video
+input_size: Tuple[int, int] = (300, 300)  # Input image size
+embed_dim: int = 728           # Feature embedding dimension
+num_heads: int = 8             # Number of attention heads
+num_layers: int = 12           # Number of transformer blocks
+
+# Training parameters  
+batch_size: int = 4            # Batch size
+learning_rate: float = 0.0005  # Learning rate
+num_epochs: int = 100          # Training epochs
+```
+
+## Implementation Details
+
+### Face Detection and Preprocessing
+
+- **Face Detection**: MTCNN with confidence thresholds [0.6, 0.7, 0.7]
+- **Face Alignment**: Similarity transformation based on eye landmarks
+- **Cropping**: Nose-centered cropping with 1.25× margin
+- **Normalization**: ImageNet statistics (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+### Attention Mechanism
+
+The decomposed attention processes spatial and temporal dimensions separately:
+
+1. **Temporal Attention**: Applied to frame differences (self-subtract mechanism)
+2. **Spatial Attention**: Applied to spatial tokens within each frame
+3. **Computational Complexity**: Reduced from O(T²H²W²) to O(T² + H²W²)
+
+### Training Strategy
+
+- **Loss Function**: Binary Cross-Entropy with Logits
+- **Optimizer**: SGD with momentum (0.9) and weight decay (1e-4)
+- **Scheduler**: Cosine annealing with warmup
+- **Gradient Clipping**: Max norm of 1.0
+
+## Evaluation Metrics
+
+The model is evaluated using:
+- **Accuracy**: Overall classification accuracy
+- **Precision/Recall/F1**: Per-class performance metrics
+- **AUC**: Area under ROC curve
+
+## Limitations and Future Work
+
+This implementation focuses on the core ISTVT architecture and training pipeline. The following components from the original paper are not implemented:
+
+- **LRP-based Interpretability**: Layer-wise relevance propagation for attention visualization
+- **Robustness Testing**: Evaluation under compression, downscaling, and noise
+- **Advanced Augmentation**: Specific augmentation strategies for deepfake detection
+- **Multi-dataset Evaluation**: Cross-dataset generalization experiments
+
+## Course Project Notes
+
+This implementation was developed as part of the EE656 course curriculum. While it implements the core concepts from the ISTVT paper, it represents an independent educational implementation rather than a reproduction of the original authors' work.
+
+## References
+
+The implementation is based on concepts from:
+```
+Zhao, Cairong, et al. "ISTVT: Interpretable Spatial-Temporal Video Transformer for Deepfake Detection." 
+IEEE Transactions on Information Forensics and Security 18 (2023): 1335-1348.
 ```
 
 ## License
 
-This project is licensed under the MIT License.
+This project is developed for educational purposes as part of the EE656 course.
